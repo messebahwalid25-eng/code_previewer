@@ -1,9 +1,26 @@
-import { Code2, Menu } from "lucide-react";
+import { Code2, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const scrollToUpload = () => {
+    const uploadZone = document.querySelector('[data-upload-zone]');
+    if (uploadZone) {
+      uploadZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setMobileMenuOpen(false);
+  };
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    e.preventDefault();
+    const element = document.querySelector(hash);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+    setMobileMenuOpen(false);
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
@@ -18,22 +35,34 @@ const Header = () => {
         </a>
 
         <nav className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+          <a 
+            href="#features" 
+            onClick={(e) => handleNavClick(e, '#features')}
+            className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+          >
             Fonctionnalités
           </a>
-          <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+          <a 
+            href="#how-it-works" 
+            onClick={(e) => handleNavClick(e, '#how-it-works')}
+            className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+          >
             Comment ça marche
           </a>
-          <a href="#users" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+          <a 
+            href="#users" 
+            onClick={(e) => handleNavClick(e, '#users')}
+            className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+          >
             Utilisateurs
           </a>
         </nav>
 
         <div className="hidden md:flex items-center gap-4">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={scrollToUpload}>
             Connexion
           </Button>
-          <Button variant="hero" size="sm">
+          <Button variant="hero" size="sm" onClick={scrollToUpload}>
             Commencer
           </Button>
         </div>
@@ -42,25 +71,37 @@ const Header = () => {
           className="md:hidden p-2 text-foreground"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
-          <Menu className="w-6 h-6" />
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
       {mobileMenuOpen && (
         <div className="md:hidden bg-card border-b border-border animate-fade-in">
           <nav className="container mx-auto px-6 py-4 flex flex-col gap-4">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors py-2">
+            <a 
+              href="#features" 
+              onClick={(e) => handleNavClick(e, '#features')}
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
               Fonctionnalités
             </a>
-            <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors py-2">
+            <a 
+              href="#how-it-works" 
+              onClick={(e) => handleNavClick(e, '#how-it-works')}
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
               Comment ça marche
             </a>
-            <a href="#users" className="text-muted-foreground hover:text-foreground transition-colors py-2">
+            <a 
+              href="#users" 
+              onClick={(e) => handleNavClick(e, '#users')}
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
               Utilisateurs
             </a>
             <div className="flex flex-col gap-3 pt-4 border-t border-border">
-              <Button variant="ghost">Connexion</Button>
-              <Button variant="hero">Commencer</Button>
+              <Button variant="ghost" onClick={scrollToUpload}>Connexion</Button>
+              <Button variant="hero" onClick={scrollToUpload}>Commencer</Button>
             </div>
           </nav>
         </div>

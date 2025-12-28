@@ -3,6 +3,13 @@ import { Button } from "@/components/ui/button";
 import UploadZone from "./UploadZone";
 
 const HeroSection = () => {
+  const scrollToUpload = () => {
+    const uploadZone = document.querySelector('[data-upload-zone]');
+    if (uploadZone) {
+      uploadZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
       {/* Background Effects */}
@@ -33,12 +40,12 @@ const HeroSection = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-up" style={{ animationDelay: '0.3s' }}>
-            <Button variant="hero" size="xl" className="group">
+            <Button variant="hero" size="xl" className="group" onClick={scrollToUpload}>
               <Upload className="w-5 h-5" />
               Uploader un projet
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button variant="heroOutline" size="xl">
+            <Button variant="heroOutline" size="xl" onClick={scrollToUpload}>
               Voir une démo
             </Button>
           </div>

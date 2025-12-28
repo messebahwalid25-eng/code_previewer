@@ -53,6 +53,7 @@ const UploadZone = () => {
 
   return (
     <div
+      data-upload-zone
       className={`
         relative max-w-2xl mx-auto p-8 rounded-2xl border-2 border-dashed transition-all duration-300
         ${isInteractive ? "cursor-pointer hover:border-primary/50 hover:bg-card" : "cursor-default"}
