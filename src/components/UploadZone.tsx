@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw, ArrowRight, Package } from "lucide-react";
 import { useUploadProject } from "@/hooks/useUploadProject";
@@ -6,18 +6,22 @@ import { Button } from "@/components/ui/button";
 
 const UploadZone = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadState, progress, fileName, projectId, uploadProject, reset } = useUploadProject();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       uploadProject(files[0]);
@@ -29,6 +33,13 @@ const UploadZone = () => {
     if (files && files.length > 0) {
       uploadProject(files[0]);
     }
+    // Reset input value to allow selecting the same file again
+    e.target.value = "";
+  };
+
+  const handleClick = () => {
+    console.log("Upload zone clicked, opening file dialog...");
+    fileInputRef.current?.click();
   };
 
   const handleViewProject = () => {
@@ -55,15 +66,14 @@ const UploadZone = () => {
       onDragOver={isInteractive ? handleDragOver : undefined}
       onDragLeave={isInteractive ? handleDragLeave : undefined}
       onDrop={isInteractive ? handleDrop : undefined}
-      onClick={isInteractive ? () => document.getElementById("file-input")?.click() : undefined}
+      onClick={isInteractive ? handleClick : undefined}
     >
       <input
-        id="file-input"
+        ref={fileInputRef}
         type="file"
         accept=".zip,.rar"
         className="hidden"
         onChange={handleFileInput}
-        disabled={!isInteractive}
       />
 
       <div className="flex flex-col items-center gap-4">
