@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      projects: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          file_path: string
+          file_size: number
+          id: string
+          name: string
+          original_filename: string
+          preview_url: string | null
+          project_type: Database["public"]["Enums"]["project_type"]
+          status: Database["public"]["Enums"]["project_status"]
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          file_path: string
+          file_size: number
+          id?: string
+          name: string
+          original_filename: string
+          preview_url?: string | null
+          project_type?: Database["public"]["Enums"]["project_type"]
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          file_path?: string
+          file_size?: number
+          id?: string
+          name?: string
+          original_filename?: string
+          preview_url?: string | null
+          project_type?: Database["public"]["Enums"]["project_type"]
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +67,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      project_status: "pending" | "processing" | "ready" | "error"
+      project_type: "html_css_js" | "react" | "flutter_web" | "unknown"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +195,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      project_status: ["pending", "processing", "ready", "error"],
+      project_type: ["html_css_js", "react", "flutter_web", "unknown"],
+    },
   },
 } as const
