@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { extractionService } from "@/services/extractionService";
 
-export type UploadState = "idle" | "uploading" | "processing" | "success" | "error";
+export type UploadState = "idle" | "uploading" | "processing" | "extracting" | "success" | "error";
 
 interface UploadResult {
   projectId: string;
@@ -52,7 +53,7 @@ export const useUploadProject = () => {
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      setProgress(60);
+      setProgress(50);
       setUploadState("processing");
 
       // Create project record
@@ -75,18 +76,29 @@ export const useUploadProject = () => {
         throw new Error(`Failed to create project: ${insertError.message}`);
       }
 
+      setProjectId(project.id);
+      setProgress(70);
+      setUploadState("extracting");
+
+      // Trigger extraction
+      const extractionResult = await extractionService.triggerExtraction(project.id);
+
+      if (!extractionResult.success) {
+        console.warn("Extraction warning:", extractionResult.error);
+        // Don't fail the upload, just warn
+      }
+
       setProgress(100);
       setUploadState("success");
-      setProjectId(project.id);
 
       toast({
         title: "Projet uploadé !",
-        description: "Votre projet a été uploadé avec succès et est en cours d'analyse.",
+        description: `Votre projet a été uploadé avec succès. ${extractionResult.filesCount || 0} fichiers extraits.`,
       });
 
       return {
         projectId: project.id,
-        status: project.status,
+        status: "ready",
       };
     } catch (error) {
       console.error("Upload error:", error);

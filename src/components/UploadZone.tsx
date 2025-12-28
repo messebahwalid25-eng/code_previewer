@@ -1,10 +1,12 @@
 import { useCallback } from "react";
-import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw, ArrowRight, Package } from "lucide-react";
 import { useUploadProject } from "@/hooks/useUploadProject";
 import { Button } from "@/components/ui/button";
 
 const UploadZone = () => {
-  const { uploadState, progress, fileName, uploadProject, reset } = useUploadProject();
+  const navigate = useNavigate();
+  const { uploadState, progress, fileName, projectId, uploadProject, reset } = useUploadProject();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -29,7 +31,14 @@ const UploadZone = () => {
     }
   };
 
+  const handleViewProject = () => {
+    if (projectId) {
+      navigate(`/project/${projectId}`);
+    }
+  };
+
   const isInteractive = uploadState === "idle" || uploadState === "error";
+  const isProcessing = uploadState === "uploading" || uploadState === "processing" || uploadState === "extracting";
 
   return (
     <div
@@ -74,10 +83,14 @@ const UploadZone = () => {
           </>
         )}
 
-        {(uploadState === "uploading" || uploadState === "processing") && (
+        {isProcessing && (
           <>
             <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              {uploadState === "extracting" ? (
+                <Package className="w-8 h-8 text-primary animate-pulse" />
+              ) : (
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              )}
             </div>
             <div className="text-center">
               <p className="text-foreground font-medium mb-1 flex items-center gap-2 justify-center">
@@ -85,7 +98,9 @@ const UploadZone = () => {
                 {fileName}
               </p>
               <p className="text-muted-foreground text-sm">
-                {uploadState === "uploading" ? "Upload en cours..." : "Analyse en cours..."}
+                {uploadState === "uploading" && "Upload en cours..."}
+                {uploadState === "processing" && "Création du projet..."}
+                {uploadState === "extracting" && "Extraction des fichiers..."}
               </p>
             </div>
             <div className="w-full max-w-xs h-2 bg-secondary rounded-full overflow-hidden">
@@ -108,21 +123,32 @@ const UploadZone = () => {
                 {fileName}
               </p>
               <p className="text-green-500 text-sm font-medium">
-                Projet uploadé avec succès !
+                Projet uploadé et extrait avec succès !
               </p>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={(e) => {
-                e.stopPropagation();
-                reset();
-              }}
-              className="mt-2"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Uploader un autre projet
-            </Button>
+            <div className="flex gap-2 mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  reset();
+                }}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Nouveau
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewProject();
+                }}
+              >
+                Voir le projet
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
           </>
         )}
 
