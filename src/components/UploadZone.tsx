@@ -1,71 +1,52 @@
-import { useState, useCallback } from "react";
-import { Upload, FileArchive, CheckCircle2, Loader2 } from "lucide-react";
+import { useCallback } from "react";
+import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import { useUploadProject } from "@/hooks/useUploadProject";
+import { Button } from "@/components/ui/button";
 
 const UploadZone = () => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success'>('idle');
-  const [fileName, setFileName] = useState<string | null>(null);
+  const { uploadState, progress, fileName, uploadProject, reset } = useUploadProject();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
-    
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFile(files[0]);
+      uploadProject(files[0]);
     }
-  }, []);
+  }, [uploadProject]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFile(files[0]);
+      uploadProject(files[0]);
     }
   };
 
-  const handleFile = (file: File) => {
-    const validExtensions = ['.zip', '.rar'];
-    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-    
-    if (!validExtensions.includes(fileExtension)) {
-      alert('Veuillez uploader un fichier .zip ou .rar');
-      return;
-    }
-
-    setFileName(file.name);
-    setUploadState('uploading');
-
-    // Simulate upload
-    setTimeout(() => {
-      setUploadState('success');
-    }, 2000);
-  };
+  const isInteractive = uploadState === "idle" || uploadState === "error";
 
   return (
     <div
       className={`
-        relative max-w-2xl mx-auto p-8 rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
-        ${isDragging 
-          ? 'border-primary bg-primary/10 scale-[1.02]' 
-          : uploadState === 'success'
-            ? 'border-green-500/50 bg-green-500/5'
-            : 'border-border bg-card/50 hover:border-primary/50 hover:bg-card'
+        relative max-w-2xl mx-auto p-8 rounded-2xl border-2 border-dashed transition-all duration-300
+        ${isInteractive ? "cursor-pointer hover:border-primary/50 hover:bg-card" : "cursor-default"}
+        ${uploadState === "success"
+          ? "border-green-500/50 bg-green-500/5"
+          : uploadState === "error"
+            ? "border-destructive/50 bg-destructive/5"
+            : "border-border bg-card/50"
         }
       `}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      onClick={() => document.getElementById('file-input')?.click()}
+      onDragOver={isInteractive ? handleDragOver : undefined}
+      onDragLeave={isInteractive ? handleDragLeave : undefined}
+      onDrop={isInteractive ? handleDrop : undefined}
+      onClick={isInteractive ? () => document.getElementById("file-input")?.click() : undefined}
     >
       <input
         id="file-input"
@@ -73,15 +54,13 @@ const UploadZone = () => {
         accept=".zip,.rar"
         className="hidden"
         onChange={handleFileInput}
+        disabled={!isInteractive}
       />
 
       <div className="flex flex-col items-center gap-4">
-        {uploadState === 'idle' && (
+        {uploadState === "idle" && (
           <>
-            <div className={`
-              w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300
-              ${isDragging ? 'bg-primary/20 text-primary scale-110' : 'bg-secondary text-muted-foreground'}
-            `}>
+            <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
               <Upload className="w-8 h-8" />
             </div>
             <div className="text-center">
@@ -95,42 +74,69 @@ const UploadZone = () => {
           </>
         )}
 
-        {uploadState === 'uploading' && (
+        {(uploadState === "uploading" || uploadState === "processing") && (
           <>
             <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
             <div className="text-center">
-              <p className="text-foreground font-medium mb-1 flex items-center gap-2">
+              <p className="text-foreground font-medium mb-1 flex items-center gap-2 justify-center">
                 <FileArchive className="w-4 h-4 text-primary" />
                 {fileName}
               </p>
               <p className="text-muted-foreground text-sm">
-                Analyse en cours...
+                {uploadState === "uploading" ? "Upload en cours..." : "Analyse en cours..."}
               </p>
             </div>
             <div className="w-full max-w-xs h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full animate-shimmer" style={{ 
-                backgroundImage: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.5), transparent)',
-                backgroundSize: '200% 100%',
-                width: '100%'
-              }} />
+              <div 
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </>
         )}
 
-        {uploadState === 'success' && (
+        {uploadState === "success" && (
           <>
             <div className="w-16 h-16 rounded-2xl bg-green-500/20 flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
             <div className="text-center">
-              <p className="text-foreground font-medium mb-1 flex items-center gap-2">
+              <p className="text-foreground font-medium mb-1 flex items-center gap-2 justify-center">
                 <FileArchive className="w-4 h-4 text-green-500" />
                 {fileName}
               </p>
               <p className="text-green-500 text-sm font-medium">
-                Projet HTML/CSS/JS détecté ! Prévisualisation prête.
+                Projet uploadé avec succès !
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={(e) => {
+                e.stopPropagation();
+                reset();
+              }}
+              className="mt-2"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Uploader un autre projet
+            </Button>
+          </>
+        )}
+
+        {uploadState === "error" && (
+          <>
+            <div className="w-16 h-16 rounded-2xl bg-destructive/20 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="text-center">
+              <p className="text-foreground font-medium mb-1">
+                Erreur lors de l'upload
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Cliquez pour réessayer
               </p>
             </div>
           </>
