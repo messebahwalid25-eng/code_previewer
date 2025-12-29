@@ -1,21 +1,27 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Folder, File, FileCode, Image, Loader2 } from "lucide-react";
+import { ArrowLeft, Folder, File, FileCode, Image as ImageIcon, Loader2, Eye, Code, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { projectService, Project } from "@/services/projectService";
 import { useExtractedFiles } from "@/hooks/useExtractedFiles";
-import { extractionService } from "@/services/extractionService";
+import { extractionService, ExtractedFile } from "@/services/extractionService";
+import CodeViewer from "@/components/CodeViewer";
+import ProjectTypeBadge from "@/components/ProjectTypeBadge";
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<ExtractedFile | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [viewMode, setViewMode] = useState<"code" | "preview">("code");
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
   const { files, isLoading: isLoadingFiles } = useExtractedFiles(id || null);
+
+  const canPreview = project?.project_type === "html_css_js";
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -34,21 +40,45 @@ const ProjectDetails = () => {
     fetchProject();
   }, [id]);
 
-  const handleFileClick = async (storagePath: string, fileType: string) => {
-    if (fileType !== "code") return;
-    
-    setSelectedFile(storagePath);
-    setIsLoadingContent(true);
-    
-    try {
-      const content = await extractionService.getFileContent(storagePath);
-      setFileContent(content);
-    } catch (error) {
-      console.error("Error loading file content:", error);
-      setFileContent(null);
-    } finally {
-      setIsLoadingContent(false);
+  // Auto-select first code file
+  useEffect(() => {
+    if (files.length > 0 && !selectedFile) {
+      const firstCodeFile = files.find(f => f.file_type === "code");
+      if (firstCodeFile) {
+        handleFileClick(firstCodeFile);
+      }
     }
+  }, [files, selectedFile]);
+
+  const handleFileClick = async (file: ExtractedFile) => {
+    setSelectedFile(file);
+    
+    if (file.file_type === "code") {
+      setIsLoadingContent(true);
+      try {
+        const content = await extractionService.getFileContent(file.storage_path);
+        setFileContent(content);
+      } catch (error) {
+        console.error("Error loading file content:", error);
+        setFileContent(null);
+      } finally {
+        setIsLoadingContent(false);
+      }
+    } else if (file.file_type === "image") {
+      setFileContent(null);
+    }
+  };
+
+  const toggleDir = (dir: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) {
+        next.delete(dir);
+      } else {
+        next.add(dir);
+      }
+      return next;
+    });
   };
 
   const getFileIcon = (fileType: string) => {
@@ -56,20 +86,92 @@ const ProjectDetails = () => {
       case "code":
         return <FileCode className="h-4 w-4 text-primary" />;
       case "image":
-        return <Image className="h-4 w-4 text-green-500" />;
+        return <ImageIcon className="h-4 w-4 text-green-500" />;
       default:
         return <File className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
-  // Group files by directory
-  const groupedFiles = files.reduce((acc, file) => {
-    const parts = file.file_path.split("/");
-    const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
-    if (!acc[dir]) acc[dir] = [];
-    acc[dir].push(file);
-    return acc;
-  }, {} as Record<string, typeof files>);
+  // Build file tree structure
+  const buildFileTree = (files: ExtractedFile[]) => {
+    const tree: Record<string, { files: ExtractedFile[]; dirs: Set<string> }> = { "": { files: [], dirs: new Set() } };
+    
+    files.forEach(file => {
+      const parts = file.file_path.split("/");
+      const fileName = parts.pop() || "";
+      const dirPath = parts.join("/");
+      
+      // Ensure all parent directories exist
+      let currentPath = "";
+      parts.forEach(part => {
+        if (!tree[currentPath]) {
+          tree[currentPath] = { files: [], dirs: new Set() };
+        }
+        tree[currentPath].dirs.add(part);
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+      });
+      
+      if (!tree[dirPath]) {
+        tree[dirPath] = { files: [], dirs: new Set() };
+      }
+      tree[dirPath].files.push(file);
+    });
+    
+    return tree;
+  };
+
+  const fileTree = buildFileTree(files);
+
+  const renderFileTree = (dirPath: string = "", depth: number = 0) => {
+    const node = fileTree[dirPath];
+    if (!node) return null;
+
+    const dirs = Array.from(node.dirs).sort();
+    const sortedFiles = [...node.files].sort((a, b) => a.file_name.localeCompare(b.file_name));
+
+    return (
+      <>
+        {dirs.map(dir => {
+          const fullPath = dirPath ? `${dirPath}/${dir}` : dir;
+          const isExpanded = expandedDirs.has(fullPath);
+          
+          return (
+            <div key={fullPath}>
+              <button
+                onClick={() => toggleDir(fullPath)}
+                className="w-full flex items-center gap-1 py-1.5 px-2 text-sm rounded-md hover:bg-muted text-left text-muted-foreground"
+                style={{ paddingLeft: `${depth * 12 + 8}px` }}
+              >
+                <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                <Folder className="h-4 w-4 text-amber-500" />
+                <span className="truncate">{dir}</span>
+              </button>
+              {isExpanded && renderFileTree(fullPath, depth + 1)}
+            </div>
+          );
+        })}
+        
+        {sortedFiles.map(file => (
+          <button
+            key={file.id}
+            onClick={() => handleFileClick(file)}
+            className={`w-full flex items-center gap-2 py-1.5 px-2 text-sm rounded-md transition-colors text-left ${
+              selectedFile?.id === file.id
+                ? "bg-primary/10 text-primary"
+                : "hover:bg-muted"
+            }`}
+            style={{ paddingLeft: `${depth * 12 + 20}px` }}
+          >
+            {getFileIcon(file.file_type)}
+            <span className="truncate flex-1">{file.file_name}</span>
+            <span className="text-xs text-muted-foreground">
+              {extractionService.formatFileSize(file.file_size)}
+            </span>
+          </button>
+        ))}
+      </>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -92,36 +194,36 @@ const ProjectDetails = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card shrink-0">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">{project.name}</h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                  {projectService.getProjectTypeLabel(project.project_type)}
-                </span>
-                <span>•</span>
-                <span>{projectService.formatFileSize(project.file_size)}</span>
-                <span>•</span>
-                <span>{files.length} fichiers</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold">{project.name}</h1>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                  <span>{projectService.formatFileSize(project.file_size)}</span>
+                  <span>•</span>
+                  <span>{files.length} fichiers</span>
+                </div>
               </div>
             </div>
+            
+            <ProjectTypeBadge projectType={project.project_type} canPreview={canPreview} />
           </div>
         </div>
       </header>
 
       {/* Content */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className="flex flex-1 overflow-hidden">
         {/* File Tree */}
-        <aside className="w-80 border-r border-border bg-card overflow-y-auto">
-          <div className="p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
+        <aside className="w-72 border-r border-border bg-card overflow-y-auto shrink-0">
+          <div className="p-3">
+            <h2 className="font-semibold mb-3 flex items-center gap-2 text-sm px-2">
               <Folder className="h-4 w-4" />
               Fichiers
             </h2>
@@ -135,68 +237,77 @@ const ProjectDetails = () => {
                 Aucun fichier extrait
               </p>
             ) : (
-              <div className="space-y-1">
-                {Object.entries(groupedFiles).map(([dir, dirFiles]) => (
-                  <div key={dir}>
-                    {dir && (
-                      <div className="flex items-center gap-2 py-1 px-2 text-sm text-muted-foreground">
-                        <Folder className="h-3 w-3" />
-                        <span className="truncate">{dir}</span>
-                      </div>
-                    )}
-                    {dirFiles.map((file) => (
-                      <button
-                        key={file.id}
-                        onClick={() => handleFileClick(file.storage_path, file.file_type)}
-                        className={`w-full flex items-center gap-2 py-1.5 px-3 text-sm rounded-md transition-colors text-left ${
-                          selectedFile === file.storage_path
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-muted"
-                        } ${file.file_type !== "code" ? "opacity-60" : ""}`}
-                        style={{ paddingLeft: dir ? "1.5rem" : "0.75rem" }}
-                      >
-                        {getFileIcon(file.file_type)}
-                        <span className="truncate flex-1">{file.file_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {extractionService.formatFileSize(file.file_size)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
+              <div className="space-y-0.5">
+                {renderFileTree()}
               </div>
             )}
           </div>
         </aside>
 
-        {/* Code Viewer */}
-        <main className="flex-1 overflow-hidden bg-muted/30">
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
           {selectedFile ? (
-            <div className="h-full flex flex-col">
-              <div className="px-4 py-2 border-b border-border bg-card flex items-center gap-2">
-                <FileCode className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">
-                  {selectedFile.split("/").pop()}
-                </span>
+            <>
+              {/* File Header */}
+              <div className="px-4 py-2 border-b border-border bg-card flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  {getFileIcon(selectedFile.file_type)}
+                  <span className="text-sm font-medium">{selectedFile.file_path}</span>
+                </div>
+                
+                {canPreview && selectedFile.file_name.endsWith(".html") && (
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                    <Button
+                      variant={viewMode === "code" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("code")}
+                      className="h-7 px-3"
+                    >
+                      <Code className="h-3 w-3 mr-1" />
+                      Code
+                    </Button>
+                    <Button
+                      variant={viewMode === "preview" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("preview")}
+                      className="h-7 px-3"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      Aperçu
+                    </Button>
+                  </div>
+                )}
               </div>
-              <div className="flex-1 overflow-auto">
+
+              {/* File Content */}
+              <div className="flex-1 overflow-hidden">
                 {isLoadingContent ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                ) : fileContent ? (
-                  <pre className="p-4 text-sm font-mono text-foreground whitespace-pre-wrap break-words">
-                    {fileContent}
-                  </pre>
+                ) : selectedFile.file_type === "code" && fileContent ? (
+                  <CodeViewer 
+                    code={fileContent} 
+                    fileName={selectedFile.file_name}
+                    className="h-full rounded-none"
+                  />
+                ) : selectedFile.file_type === "image" ? (
+                  <div className="h-full flex items-center justify-center p-8 bg-muted/30">
+                    <img 
+                      src={extractionService.getFileUrl(selectedFile.storage_path)} 
+                      alt={selectedFile.file_name}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                    />
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
-                    Impossible de charger le contenu
+                    Impossible d'afficher ce type de fichier
                   </div>
                 )}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
+            <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30">
               <div className="text-center">
                 <FileCode className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Sélectionnez un fichier pour voir son contenu</p>
