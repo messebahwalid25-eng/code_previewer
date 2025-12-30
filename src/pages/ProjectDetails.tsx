@@ -285,6 +285,13 @@ const ProjectDetails = () => {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
+                ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && fileContent ? (
+                  <iframe
+                    srcDoc={fileContent}
+                    title="Preview"
+                    className="w-full h-full border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
                 ) : selectedFile.file_type === "code" && fileContent ? (
                   <CodeViewer 
                     code={fileContent} 
