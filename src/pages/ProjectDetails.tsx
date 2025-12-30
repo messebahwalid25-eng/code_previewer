@@ -42,12 +42,26 @@ const ProjectDetails = () => {
     fetchProject();
   }, [id]);
 
-  // Auto-select first code file
+  // Auto-select index.html or first code file, and expand parent directories
   useEffect(() => {
     if (files.length > 0 && !selectedFile) {
-      const firstCodeFile = files.find(f => f.file_type === "code");
-      if (firstCodeFile) {
-        handleFileClick(firstCodeFile);
+      // Prioritize index.html
+      const indexHtml = files.find(f => f.file_name === "index.html");
+      const fileToSelect = indexHtml || files.find(f => f.file_type === "code");
+      
+      if (fileToSelect) {
+        // Auto-expand parent directories
+        const parts = fileToSelect.file_path.split("/");
+        parts.pop(); // Remove filename
+        const dirs = new Set<string>();
+        let currentPath = "";
+        parts.forEach(part => {
+          currentPath = currentPath ? `${currentPath}/${part}` : part;
+          dirs.add(currentPath);
+        });
+        setExpandedDirs(dirs);
+        
+        handleFileClick(fileToSelect);
       }
     }
   }, [files, selectedFile]);
