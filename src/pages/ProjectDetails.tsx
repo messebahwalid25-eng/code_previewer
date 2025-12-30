@@ -8,6 +8,7 @@ import { extractionService, ExtractedFile } from "@/services/extractionService";
 import { previewService } from "@/services/previewService";
 import CodeViewer from "@/components/CodeViewer";
 import ProjectTypeBadge from "@/components/ProjectTypeBadge";
+import ReactPreview from "@/components/ReactPreview";
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,10 +21,13 @@ const ProjectDetails = () => {
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [reactFileContents, setReactFileContents] = useState<Record<string, string>>({});
+  const [isLoadingReactFiles, setIsLoadingReactFiles] = useState(false);
 
   const { files, isLoading: isLoadingFiles } = useExtractedFiles(id || null);
 
   const canPreview = project?.project_type === "html_css_js";
+  const canPreviewReact = project?.project_type === "react";
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -65,6 +69,33 @@ const ProjectDetails = () => {
       }
     }
   }, [files, selectedFile]);
+
+  // Load all React files for preview
+  useEffect(() => {
+    const loadReactFiles = async () => {
+      if (project?.project_type !== "react" || files.length === 0) return;
+      
+      setIsLoadingReactFiles(true);
+      const contents: Record<string, string> = {};
+      
+      // Load all code files
+      const codeFiles = files.filter(f => f.file_type === "code");
+      
+      await Promise.all(
+        codeFiles.map(async (file) => {
+          const content = await extractionService.getFileContent(file.storage_path);
+          if (content) {
+            contents[file.storage_path] = content;
+          }
+        })
+      );
+      
+      setReactFileContents(contents);
+      setIsLoadingReactFiles(false);
+    };
+    
+    loadReactFiles();
+  }, [project?.project_type, files]);
 
   const handleFileClick = async (file: ExtractedFile) => {
     setSelectedFile(file);
@@ -236,7 +267,7 @@ const ProjectDetails = () => {
               </div>
             </div>
             
-            <ProjectTypeBadge projectType={project.project_type} canPreview={canPreview} />
+            <ProjectTypeBadge projectType={project.project_type} canPreview={canPreview || canPreviewReact} />
           </div>
         </div>
       </header>
@@ -278,7 +309,7 @@ const ProjectDetails = () => {
                   <span className="text-sm font-medium">{selectedFile.file_path}</span>
                 </div>
                 
-                {canPreview && selectedFile.file_name.endsWith(".html") && (
+                {(canPreview && selectedFile.file_name.endsWith(".html")) || canPreviewReact ? (
                   <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                     <Button
                       variant={viewMode === "code" ? "default" : "ghost"}
@@ -294,12 +325,13 @@ const ProjectDetails = () => {
                       size="sm"
                       onClick={() => setViewMode("preview")}
                       className="h-7 px-3"
+                      disabled={canPreviewReact && isLoadingReactFiles}
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       Aperçu
                     </Button>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* File Content */}
@@ -308,6 +340,19 @@ const ProjectDetails = () => {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
+                ) : viewMode === "preview" && canPreviewReact ? (
+                  isLoadingReactFiles ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Chargement du projet React...</span>
+                    </div>
+                  ) : (
+                    <ReactPreview 
+                      files={files} 
+                      fileContents={reactFileContents}
+                      className="h-full"
+                    />
+                  )
                 ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && previewHtml ? (
                   <iframe
                     srcDoc={previewHtml}
