@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { projectService, Project } from "@/services/projectService";
 import { useExtractedFiles } from "@/hooks/useExtractedFiles";
 import { extractionService, ExtractedFile } from "@/services/extractionService";
+import { previewService } from "@/services/previewService";
 import CodeViewer from "@/components/CodeViewer";
 import ProjectTypeBadge from "@/components/ProjectTypeBadge";
 
@@ -15,6 +16,7 @@ const ProjectDetails = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<ExtractedFile | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
@@ -52,12 +54,19 @@ const ProjectDetails = () => {
 
   const handleFileClick = async (file: ExtractedFile) => {
     setSelectedFile(file);
+    setPreviewHtml(null);
     
     if (file.file_type === "code") {
       setIsLoadingContent(true);
       try {
         const content = await extractionService.getFileContent(file.storage_path);
         setFileContent(content);
+        
+        // If it's an HTML file and project can preview, build preview HTML
+        if (canPreview && file.file_name.endsWith(".html") && content && id) {
+          const builtHtml = await previewService.buildPreviewHtml(content, id, files);
+          setPreviewHtml(builtHtml);
+        }
       } catch (error) {
         console.error("Error loading file content:", error);
         setFileContent(null);
@@ -285,9 +294,9 @@ const ProjectDetails = () => {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && fileContent ? (
+                ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && previewHtml ? (
                   <iframe
-                    srcDoc={fileContent}
+                    srcDoc={previewHtml}
                     title="Preview"
                     className="w-full h-full border-0 bg-white"
                     sandbox="allow-scripts allow-same-origin"
