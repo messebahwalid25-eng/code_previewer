@@ -340,7 +340,7 @@ const ProjectDetails = () => {
                   <span className="text-sm font-medium">{selectedFile.file_path}</span>
                 </div>
                 
-                {(canPreview && selectedFile.file_name.endsWith(".html")) || canPreviewReact ? (
+                {(canPreview && selectedIsHtml) || canPreviewReact ? (
                   <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                     <Button
                       variant={viewMode === "code" ? "default" : "ghost"}
@@ -356,7 +356,7 @@ const ProjectDetails = () => {
                       size="sm"
                       onClick={() => setViewMode("preview")}
                       className="h-7 px-3"
-                      disabled={canPreviewReact && isLoadingReactFiles}
+                      disabled={(canPreviewReact && isLoadingReactFiles) || (selectedIsHtml && isLoadingPreview)}
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       Aperçu
@@ -384,13 +384,24 @@ const ProjectDetails = () => {
                       className="h-full"
                     />
                   )
-                ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && previewHtml ? (
-                  <iframe
-                    srcDoc={previewHtml}
-                    title="Preview"
-                    className="w-full h-full border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin"
-                  />
+                ) : viewMode === "preview" && canPreview && selectedIsHtml ? (
+                  isLoadingPreview ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Préparation de l’aperçu HTML...</span>
+                    </div>
+                  ) : previewHtml ? (
+                    <iframe
+                      srcDoc={previewHtml}
+                      title="Preview"
+                      className="w-full h-full border-0 bg-white"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      Aperçu indisponible pour ce fichier HTML
+                    </div>
+                  )
                 ) : selectedFile.file_type === "code" && fileContent ? (
                   <CodeViewer 
                     code={fileContent} 
