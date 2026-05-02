@@ -19,6 +19,7 @@ const ProjectDetails = () => {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [reactFileContents, setReactFileContents] = useState<Record<string, string>>({});
@@ -26,9 +27,11 @@ const ProjectDetails = () => {
 
   const { files, isLoading: isLoadingFiles } = useExtractedFiles(id || null);
 
-  const canPreview = project?.project_type === "html_css_js";
+  const hasHtmlFile = files.some(f => f.file_name.toLowerCase().endsWith(".html"));
+  const canPreview = project?.project_type === "html_css_js" || hasHtmlFile;
   const canPreviewReact = project?.project_type === "react";
   const isFlutter = project?.project_type === "flutter_web";
+  const selectedIsHtml = selectedFile?.file_type === "code" && selectedFile.file_name.toLowerCase().endsWith(".html");
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -101,18 +104,13 @@ const ProjectDetails = () => {
   const handleFileClick = async (file: ExtractedFile) => {
     setSelectedFile(file);
     setPreviewHtml(null);
+    setIsLoadingPreview(false);
     
     if (file.file_type === "code") {
       setIsLoadingContent(true);
       try {
         const content = await extractionService.getFileContent(file.storage_path);
         setFileContent(content);
-        
-        // If it's an HTML file and project can preview, build preview HTML
-        if (canPreview && file.file_name.endsWith(".html") && content && id) {
-          const builtHtml = await previewService.buildPreviewHtml(content, id, files);
-          setPreviewHtml(builtHtml);
-        }
       } catch (error) {
         console.error("Error loading file content:", error);
         setFileContent(null);
@@ -123,6 +121,38 @@ const ProjectDetails = () => {
       setFileContent(null);
     }
   };
+
+  useEffect(() => {
+    if (!selectedFile || selectedFile.file_type !== "code" || !selectedFile.file_name.toLowerCase().endsWith(".html") || !fileContent || !id) {
+      return;
+    }
+
+    let isActive = true;
+    setIsLoadingPreview(true);
+
+    previewService
+      .buildPreviewHtml(fileContent, id, files)
+      .then((builtHtml) => {
+        if (isActive) {
+          setPreviewHtml(builtHtml);
+        }
+      })
+      .catch((error) => {
+        console.error("Error building HTML preview:", error);
+        if (isActive) {
+          setPreviewHtml(null);
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsLoadingPreview(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedFile, fileContent, id, files]);
 
   const toggleDir = (dir: string) => {
     setExpandedDirs(prev => {
@@ -310,7 +340,7 @@ const ProjectDetails = () => {
                   <span className="text-sm font-medium">{selectedFile.file_path}</span>
                 </div>
                 
-                {(canPreview && selectedFile.file_name.endsWith(".html")) || canPreviewReact ? (
+                {(canPreview && selectedIsHtml) || canPreviewReact ? (
                   <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                     <Button
                       variant={viewMode === "code" ? "default" : "ghost"}
@@ -326,7 +356,7 @@ const ProjectDetails = () => {
                       size="sm"
                       onClick={() => setViewMode("preview")}
                       className="h-7 px-3"
-                      disabled={canPreviewReact && isLoadingReactFiles}
+                      disabled={(canPreviewReact && isLoadingReactFiles) || (selectedIsHtml && isLoadingPreview)}
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       Aperçu
@@ -354,13 +384,24 @@ const ProjectDetails = () => {
                       className="h-full"
                     />
                   )
-                ) : viewMode === "preview" && canPreview && selectedFile.file_name.endsWith(".html") && previewHtml ? (
-                  <iframe
-                    srcDoc={previewHtml}
-                    title="Preview"
-                    className="w-full h-full border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin"
-                  />
+                ) : viewMode === "preview" && canPreview && selectedIsHtml ? (
+                  isLoadingPreview ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Préparation de l’aperçu HTML...</span>
+                    </div>
+                  ) : previewHtml ? (
+                    <iframe
+                      srcDoc={previewHtml}
+                      title="Preview"
+                      className="w-full h-full border-0 bg-white"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      Aperçu indisponible pour ce fichier HTML
+                    </div>
+                  )
                 ) : selectedFile.file_type === "code" && fileContent ? (
                   <CodeViewer 
                     code={fileContent} 
