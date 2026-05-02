@@ -28,6 +28,7 @@ const ProjectDetails = () => {
 
   const canPreview = project?.project_type === "html_css_js";
   const canPreviewReact = project?.project_type === "react";
+  const isFlutter = project?.project_type === "flutter_web";
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -374,9 +375,24 @@ const ProjectDetails = () => {
                       className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
                     />
                   </div>
-                ) : (
+                ) : selectedFile.file_type === "code" ? (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
-                    Impossible d'afficher ce type de fichier
+                    Fichier vide
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 p-8 text-center">
+                    <File className="h-12 w-12 opacity-50" />
+                    <div>
+                      <p className="font-medium">Fichier binaire</p>
+                      <p className="text-sm">Ce type de fichier ne peut pas être affiché en texte.</p>
+                    </div>
+                    <a
+                      href={extractionService.getFileUrl(selectedFile.storage_path)}
+                      download={selectedFile.file_name}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Télécharger
+                    </a>
                   </div>
                 )}
               </div>
