@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { extractionService } from "@/services/extractionService";
+import JSZip from "jszip";
 
 export type UploadState = "idle" | "uploading" | "processing" | "extracting" | "success" | "error";
 
@@ -16,20 +17,68 @@ export const useUploadProject = () => {
   const [fileName, setFileName] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
 
-  const uploadProject = async (file: File): Promise<UploadResult | null> => {
-    const validExtensions = [".zip", ".rar"];
-    const fileExtension = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+  const uploadProject = async (input: File | FileList | File[]): Promise<UploadResult | null> => {
+    let file: File;
+    let displayName: string;
 
-    if (!validExtensions.includes(fileExtension)) {
+    // Convert FileList/array (folder upload) into a single zip
+    const filesArray: File[] = Array.isArray(input)
+      ? input
+      : input instanceof FileList
+        ? Array.from(input)
+        : [input];
+
+    if (filesArray.length === 0) return null;
+
+    if (filesArray.length === 1 && filesArray[0].name.toLowerCase().endsWith(".zip")) {
+      file = filesArray[0];
+      displayName = file.name;
+    } else if (filesArray.length === 1 && filesArray[0].name.toLowerCase().endsWith(".rar")) {
       toast({
-        title: "Format non supporté",
-        description: "Veuillez uploader un fichier .zip ou .rar",
+        title: "Format .rar non supporté",
+        description: "Compressez votre projet en .zip ou glissez le dossier directement.",
         variant: "destructive",
       });
       return null;
+    } else {
+      // Folder or multiple files → zip them client-side
+      setFileName("Compression du dossier...");
+      setUploadState("processing");
+      setProgress(5);
+
+      try {
+        const zip = new JSZip();
+        // Determine root folder name
+        const firstPath = (filesArray[0] as any).webkitRelativePath || filesArray[0].name;
+        const rootName = firstPath.split("/")[0] || "project";
+
+        for (const f of filesArray) {
+          const relPath = (f as any).webkitRelativePath || f.name;
+          // Skip useless files
+          if (
+            relPath.includes("node_modules/") ||
+            relPath.includes(".git/") ||
+            relPath.includes("__MACOSX/") ||
+            relPath.endsWith(".DS_Store")
+          ) continue;
+          zip.file(relPath, f);
+        }
+
+        const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+        file = new File([blob], `${rootName}.zip`, { type: "application/zip" });
+        displayName = `${rootName} (${filesArray.length} fichiers)`;
+      } catch (err) {
+        toast({
+          title: "Erreur de compression",
+          description: err instanceof Error ? err.message : "Impossible de zipper le dossier",
+          variant: "destructive",
+        });
+        setUploadState("error");
+        return null;
+      }
     }
 
-    setFileName(file.name);
+    setFileName(displayName);
     setUploadState("uploading");
     setProgress(10);
 
@@ -92,8 +141,8 @@ export const useUploadProject = () => {
       setUploadState("success");
 
       toast({
-        title: "Projet uploadé !",
-        description: `Votre projet a été uploadé avec succès. ${extractionResult.filesCount || 0} fichiers extraits.`,
+        title: "Projet prêt !",
+        description: `${extractionResult.filesCount || 0} fichiers extraits.`,
       });
 
       return {
