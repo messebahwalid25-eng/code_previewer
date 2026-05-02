@@ -1,12 +1,13 @@
 import { useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw, ArrowRight, Package } from "lucide-react";
+import { Upload, FileArchive, CheckCircle2, Loader2, AlertCircle, RotateCcw, ArrowRight, Package, Folder } from "lucide-react";
 import { useUploadProject } from "@/hooks/useUploadProject";
 import { Button } from "@/components/ui/button";
 
 const UploadZone = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const { uploadState, progress, fileName, projectId, uploadProject, reset } = useUploadProject();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -19,27 +20,78 @@ const UploadZone = () => {
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const items = e.dataTransfer.items;
+    // Try to read as folder via DataTransferItemList
+    if (items && items.length > 0 && (items[0] as any).webkitGetAsEntry) {
+      const allFiles: File[] = [];
+      const traverseEntry = async (entry: any, path: string): Promise<void> => {
+        if (entry.isFile) {
+          await new Promise<void>((resolve) => {
+            entry.file((file: File) => {
+              Object.defineProperty(file, "webkitRelativePath", { value: path + file.name });
+              allFiles.push(file);
+              resolve();
+            });
+          });
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const entries: any[] = await new Promise((resolve) => {
+            const collected: any[] = [];
+            const readBatch = () => reader.readEntries((batch: any[]) => {
+              if (batch.length === 0) resolve(collected);
+              else { collected.push(...batch); readBatch(); }
+            });
+            readBatch();
+          });
+          for (const child of entries) {
+            await traverseEntry(child, path + entry.name + "/");
+          }
+        }
+      };
+      const entries: any[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = (items[i] as any).webkitGetAsEntry();
+        if (entry) entries.push(entry);
+      }
+      // If single file (zip), short-circuit
+      if (entries.length === 1 && entries[0].isFile && e.dataTransfer.files[0]?.name.toLowerCase().endsWith(".zip")) {
+        uploadProject(e.dataTransfer.files[0]);
+        return;
+      }
+      for (const entry of entries) {
+        await traverseEntry(entry, "");
+      }
+      if (allFiles.length > 0) {
+        uploadProject(allFiles);
+        return;
+      }
+    }
+    // Fallback
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      uploadProject(files[0]);
+      uploadProject(files);
     }
   }, [uploadProject]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      uploadProject(files[0]);
+      uploadProject(files);
     }
     // Reset input value to allow selecting the same file again
     e.target.value = "";
   };
 
   const handleClick = () => {
-    console.log("Upload zone clicked, opening file dialog...");
     fileInputRef.current?.click();
+  };
+
+  const handleFolderClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    folderInputRef.current?.click();
   };
 
   const handleViewProject = () => {
@@ -72,7 +124,17 @@ const UploadZone = () => {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".zip,.rar"
+        accept=".zip"
+        className="hidden"
+        onChange={handleFileInput}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        // @ts-expect-error - non-standard but widely supported
+        webkitdirectory=""
+        directory=""
+        multiple
         className="hidden"
         onChange={handleFileInput}
       />
@@ -85,11 +147,21 @@ const UploadZone = () => {
             </div>
             <div className="text-center">
               <p className="text-foreground font-medium mb-1">
-                Glissez-déposez votre fichier ici
+                Glissez-déposez votre projet ici
               </p>
               <p className="text-muted-foreground text-sm">
-                ou cliquez pour sélectionner (.zip, .rar)
+                un fichier .zip ou un dossier complet
               </p>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+                <FileArchive className="w-4 h-4 mr-2" />
+                Fichier .zip
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleFolderClick}>
+                <Folder className="w-4 h-4 mr-2" />
+                Dossier
+              </Button>
             </div>
           </>
         )}
