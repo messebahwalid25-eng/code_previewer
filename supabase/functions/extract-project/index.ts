@@ -92,11 +92,16 @@ serve(async (req) => {
     let hasPackageJson = false;
     let hasIndexHtml = false;
     let hasPubspec = false;
+    let packageJsonContent = "";
 
     // First pass: detect project type
-    for (const [filePath] of Object.entries(contents.files)) {
+    for (const [filePath, file] of Object.entries(contents.files)) {
+      if (file.dir) continue;
       const fileName = filePath.split("/").pop()?.toLowerCase() || "";
-      if (fileName === "package.json") hasPackageJson = true;
+      if (fileName === "package.json" && !filePath.includes("node_modules/")) {
+        hasPackageJson = true;
+        try { packageJsonContent = await file.async("string"); } catch {}
+      }
       if (fileName === "index.html") hasIndexHtml = true;
       if (fileName === "pubspec.yaml") hasPubspec = true;
     }
@@ -104,39 +109,89 @@ serve(async (req) => {
     if (hasPubspec) {
       detectedProjectType = "flutter_web";
     } else if (hasPackageJson) {
-      detectedProjectType = "react";
+      // Detect framework from package.json
+      const pkg = packageJsonContent.toLowerCase();
+      if (pkg.includes('"react"') || pkg.includes('"next"')) {
+        detectedProjectType = "react";
+      } else {
+        detectedProjectType = "react"; // default for node projects
+      }
     } else if (hasIndexHtml) {
       detectedProjectType = "html_css_js";
     }
 
     console.log("Detected project type:", detectedProjectType);
 
-    // Second pass: extract files
-    for (const [filePath, file] of Object.entries(contents.files)) {
+    // Second pass: extract files (parallel)
+    const fileEntries = Object.entries(contents.files);
+    const uploadPromises: Promise<void>[] = [];
+
+    for (const [filePath, file] of fileEntries) {
       // Skip directories and hidden files
-      if (file.dir || filePath.startsWith(".") || filePath.includes("/.")) {
+      if (file.dir) {
         continue;
       }
 
-      // Skip node_modules and other large directories
-      if (filePath.includes("node_modules/") || filePath.includes(".git/")) {
+      // Skip heavy/irrelevant directories
+      if (
+        filePath.includes("node_modules/") ||
+        filePath.includes(".git/") ||
+        filePath.includes("__MACOSX/") ||
+        filePath.endsWith(".DS_Store") ||
+        filePath.includes("/build/") ||
+        filePath.includes("/dist/") && !filePath.endsWith("index.html")
+      ) {
         continue;
       }
 
-      try {
+      const task = (async () => {
+        try {
         const content = await file.async("arraybuffer");
+        // Skip empty files and files > 5MB
+        if (content.byteLength === 0 || content.byteLength > 5 * 1024 * 1024) {
+          return;
+        }
         const fileName = filePath.split("/").pop() || filePath;
         const fileExtension = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() : "";
-        
-        // Determine file type
+
+        // Determine file type — be inclusive
+        const codeExtensions = new Set([
+          "js","mjs","cjs","ts","jsx","tsx","html","htm","css","scss","sass","less",
+          "json","jsonc","xml","yaml","yml","md","mdx","markdown","txt","log",
+          "dart","py","rb","java","kt","kts","go","rs","php","swift","scala","groovy",
+          "c","h","cpp","hpp","cc","cs","m","mm","sh","bash","zsh","fish","ps1","bat",
+          "sql","graphql","gql","proto","toml","ini","conf","cfg","env","lock",
+          "vue","svelte","astro","ejs","hbs","handlebars","pug","liquid",
+          "r","jl","lua","pl","tcl","vim","el","clj","ex","exs","erl","hs","ml","fs",
+          "gradle","cmake","mk","makefile","dockerfile","gitignore","gitattributes",
+          "editorconfig","prettierrc","eslintrc","babelrc","npmrc","nvmrc"
+        ]);
+        const imageExtensions = new Set(["png","jpg","jpeg","gif","svg","webp","ico","bmp","avif"]);
+        const lowerName = fileName.toLowerCase();
+        const noExtTextFiles = new Set([
+          "readme","license","licence","makefile","dockerfile","procfile",
+          "gemfile","rakefile","pipfile",".env",".gitignore",".gitattributes",
+          ".editorconfig",".npmrc",".nvmrc",".prettierrc",".eslintrc",".babelrc"
+        ]);
+
         let fileType = "other";
-        const codeExtensions = ["js", "ts", "jsx", "tsx", "html", "css", "scss", "less", "json", "xml", "yaml", "yml", "md", "dart"];
-        const imageExtensions = ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"];
-        
-        if (codeExtensions.includes(fileExtension || "")) {
+        if (codeExtensions.has(fileExtension || "")) {
           fileType = "code";
-        } else if (imageExtensions.includes(fileExtension || "")) {
+        } else if (imageExtensions.has(fileExtension || "")) {
           fileType = "image";
+        } else if (noExtTextFiles.has(lowerName)) {
+          fileType = "code";
+        } else if (!fileExtension) {
+          // Try to detect text vs binary by sampling
+          const bytes = new Uint8Array(content.slice(0, Math.min(512, content.byteLength)));
+          let nonPrintable = 0;
+          for (const b of bytes) {
+            if (b === 0) { nonPrintable = bytes.length; break; }
+            if (b < 9 || (b > 13 && b < 32)) nonPrintable++;
+          }
+          if (bytes.length > 0 && nonPrintable / bytes.length < 0.1) {
+            fileType = "code";
+          }
         }
 
         // Generate storage path
@@ -152,7 +207,7 @@ serve(async (req) => {
 
         if (uploadError) {
           console.error(`Failed to upload ${filePath}:`, uploadError);
-          continue;
+          return;
         }
 
         extractedFiles.push({
@@ -162,12 +217,19 @@ serve(async (req) => {
           file_size: content.byteLength,
           storage_path: storagePath,
         });
+        } catch (err) {
+          console.error(`Error processing ${filePath}:`, err);
+        }
+      })();
+      uploadPromises.push(task);
 
-        console.log(`Extracted: ${filePath} (${content.byteLength} bytes)`);
-      } catch (err) {
-        console.error(`Error processing ${filePath}:`, err);
+      // Throttle: process in batches of 10
+      if (uploadPromises.length >= 10) {
+        await Promise.all(uploadPromises);
+        uploadPromises.length = 0;
       }
     }
+    await Promise.all(uploadPromises);
 
     console.log(`Total files extracted: ${extractedFiles.length}`);
 
