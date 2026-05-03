@@ -340,7 +340,7 @@ const ProjectDetails = () => {
                   <span className="text-sm font-medium">{selectedFile.file_path}</span>
                 </div>
                 
-                {(canPreview && selectedIsHtml) || canPreviewReact ? (
+                {selectedIsHtml || canPreviewReact ? (
                   <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                     <Button
                       variant={viewMode === "code" ? "default" : "ghost"}
@@ -356,7 +356,7 @@ const ProjectDetails = () => {
                       size="sm"
                       onClick={() => setViewMode("preview")}
                       className="h-7 px-3"
-                      disabled={(canPreviewReact && isLoadingReactFiles) || (selectedIsHtml && isLoadingPreview)}
+                      disabled={(!selectedIsHtml && canPreviewReact && isLoadingReactFiles) || (selectedIsHtml && isLoadingPreview)}
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       Aperçu
@@ -371,20 +371,7 @@ const ProjectDetails = () => {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                ) : viewMode === "preview" && canPreviewReact ? (
-                  isLoadingReactFiles ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-2">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Chargement du projet React...</span>
-                    </div>
-                  ) : (
-                    <ReactPreview 
-                      files={files} 
-                      fileContents={reactFileContents}
-                      className="h-full"
-                    />
-                  )
-                ) : viewMode === "preview" && canPreview && selectedIsHtml ? (
+                ) : viewMode === "preview" && selectedIsHtml ? (
                   isLoadingPreview ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -401,6 +388,19 @@ const ProjectDetails = () => {
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       Aperçu indisponible pour ce fichier HTML
                     </div>
+                  )
+                ) : viewMode === "preview" && canPreviewReact ? (
+                  isLoadingReactFiles ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Chargement du projet React...</span>
+                    </div>
+                  ) : (
+                    <ReactPreview 
+                      files={files} 
+                      fileContents={reactFileContents}
+                      className="h-full"
+                    />
                   )
                 ) : selectedFile.file_type === "code" && fileContent ? (
                   <CodeViewer 
