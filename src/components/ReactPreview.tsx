@@ -205,6 +205,7 @@ root.render(
         }}
         customSetup={{
           entry: entryFile,
+          dependencies,
         }}
         theme="dark"
       />
