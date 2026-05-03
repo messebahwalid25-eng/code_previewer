@@ -8,7 +8,97 @@ interface ReactPreviewProps {
   className?: string;
 }
 
+const SANDBOX_EXTENSIONS = new Set(["js", "jsx", "ts", "tsx", "css", "scss", "sass", "html", "json", "svg"]);
+const IGNORED_PATH_PARTS = new Set(["node_modules", ".git", "dist", "build", ".next", "coverage", "__MACOSX"]);
+const IGNORED_FILES = new Set([
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lockb",
+  "postcss.config.js",
+  "postcss.config.cjs",
+  "postcss.config.mjs",
+  "tailwind.config.js",
+  "tailwind.config.ts",
+  "vite.config.js",
+  "vite.config.ts",
+]);
+
+const COMMON_DEPENDENCIES: Record<string, string> = {
+  "@vitejs/plugin-react": "latest",
+  "class-variance-authority": "latest",
+  clsx: "latest",
+  "date-fns": "latest",
+  "embla-carousel-react": "latest",
+  "framer-motion": "latest",
+  "lucide-react": "latest",
+  "react-router-dom": "latest",
+  recharts: "latest",
+  sonner: "latest",
+  "tailwind-merge": "latest",
+  uuid: "latest",
+  zod: "latest",
+};
+
+const getCommonRoot = (paths: string[]) => {
+  const cleanPaths = paths.filter(path => path.includes("/") && !path.startsWith("__MACOSX/"));
+  if (cleanPaths.length === 0) return null;
+
+  const firstSegments = new Set(cleanPaths.map(path => path.split("/")[0]));
+  const hasRootFile = paths.some(path => !path.includes("/"));
+
+  return !hasRootFile && firstSegments.size === 1 ? Array.from(firstSegments)[0] : null;
+};
+
+const normalizeSandpackPath = (filePath: string, commonRoot: string | null) => {
+  const withoutRoot = commonRoot && filePath.startsWith(`${commonRoot}/`)
+    ? filePath.slice(commonRoot.length + 1)
+    : filePath;
+
+  return withoutRoot.startsWith("/") ? withoutRoot : `/${withoutRoot}`;
+};
+
+const shouldIncludeFile = (path: string) => {
+  const normalized = path.replace(/^\//, "");
+  const fileName = normalized.split("/").pop() || "";
+  const extension = fileName.split(".").pop()?.toLowerCase() || "";
+
+  if (normalized.split("/").some(part => IGNORED_PATH_PARTS.has(part))) return false;
+  if (IGNORED_FILES.has(fileName)) return false;
+  if (fileName === "package.json") return false;
+
+  return SANDBOX_EXTENSIONS.has(extension);
+};
+
+const getDependenciesFromPackageJson = (files: ExtractedFile[], fileContents: Record<string, string>, commonRoot: string | null) => {
+  const packageFile = files.find(file => normalizeSandpackPath(file.file_path, commonRoot) === "/package.json");
+  const content = packageFile ? fileContents[packageFile.storage_path] : null;
+  const dependencies: Record<string, string> = {
+    react: "18.2.0",
+    "react-dom": "18.2.0",
+  };
+
+  if (!content) return dependencies;
+
+  try {
+    const parsed = JSON.parse(content);
+    const projectDeps = { ...(parsed.dependencies || {}), ...(parsed.devDependencies || {}) };
+
+    Object.keys(projectDeps).forEach((name) => {
+      if (name === "react" || name === "react-dom") return;
+      if (name.startsWith("@types/") || name === "vite" || name === "typescript") return;
+      dependencies[name] = COMMON_DEPENDENCIES[name] || "latest";
+    });
+  } catch (error) {
+    console.warn("Invalid package.json ignored for preview", error);
+  }
+
+  return dependencies;
+};
+
 const ReactPreview = ({ files, fileContents, className = "" }: ReactPreviewProps) => {
+  const commonRoot = useMemo(() => getCommonRoot(files.map(file => file.file_path)), [files]);
+
   // Build Sandpack files object from extracted files
   const sandpackFiles = useMemo(() => {
     const result: Record<string, string> = {};
@@ -16,12 +106,10 @@ const ReactPreview = ({ files, fileContents, className = "" }: ReactPreviewProps
     // Map files to Sandpack format
     files.forEach(file => {
       const content = fileContents[file.storage_path];
-      if (content) {
+      const path = normalizeSandpackPath(file.file_path, commonRoot);
+
+      if (content && shouldIncludeFile(path)) {
         // Normalize path for Sandpack (must start with /)
-        let path = file.file_path;
-        if (!path.startsWith("/")) {
-          path = "/" + path;
-        }
         result[path] = content;
       }
     });
@@ -62,7 +150,12 @@ root.render(
     }
 
     return result;
-  }, [files, fileContents]);
+  }, [files, fileContents, commonRoot]);
+
+  const dependencies = useMemo(
+    () => getDependenciesFromPackageJson(files, fileContents, commonRoot),
+    [files, fileContents, commonRoot]
+  );
 
   // Determine entry file
   const entryFile = useMemo(() => {
@@ -112,6 +205,7 @@ root.render(
         }}
         customSetup={{
           entry: entryFile,
+          dependencies,
         }}
         theme="dark"
       />
