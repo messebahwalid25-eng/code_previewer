@@ -25,7 +25,6 @@ const IGNORED_FILES = new Set([
 ]);
 
 const COMMON_DEPENDENCIES: Record<string, string> = {
-  "@vitejs/plugin-react": "latest",
   "class-variance-authority": "latest",
   clsx: "latest",
   "date-fns": "latest",
@@ -36,9 +35,36 @@ const COMMON_DEPENDENCIES: Record<string, string> = {
   recharts: "latest",
   sonner: "latest",
   "tailwind-merge": "latest",
-  uuid: "latest",
+  uuid: "9.0.1",
   zod: "latest",
 };
+
+const BUILD_ONLY_DEPENDENCIES = new Set([
+  "@vitejs/plugin-react",
+  "@vitejs/plugin-react-swc",
+  "autoprefixer",
+  "eslint",
+  "eslint-plugin-react-hooks",
+  "eslint-plugin-react-refresh",
+  "lovable-tagger",
+  "postcss",
+  "tailwindcss",
+  "typescript",
+  "vite",
+]);
+
+const isBuildOnlyDependency = (name: string) => (
+  name.startsWith("@types/") ||
+  name.startsWith("@eslint/") ||
+  name.startsWith("@rollup/") ||
+  name.startsWith("@swc/") ||
+  name.startsWith("@tailwindcss/") ||
+  name.startsWith("@vitejs/") ||
+  name.startsWith("babel-") ||
+  name.startsWith("eslint-") ||
+  name.includes("postcss") ||
+  BUILD_ONLY_DEPENDENCIES.has(name)
+);
 
 const getCommonRoot = (paths: string[]) => {
   const cleanPaths = paths.filter(path => path.includes("/") && !path.startsWith("__MACOSX/"));
@@ -82,11 +108,11 @@ const getDependenciesFromPackageJson = (files: ExtractedFile[], fileContents: Re
 
   try {
     const parsed = JSON.parse(content);
-    const projectDeps = { ...(parsed.dependencies || {}), ...(parsed.devDependencies || {}) };
+    const projectDeps = parsed.dependencies || {};
 
     Object.keys(projectDeps).forEach((name) => {
       if (name === "react" || name === "react-dom") return;
-      if (name.startsWith("@types/") || name === "vite" || name === "typescript") return;
+      if (isBuildOnlyDependency(name)) return;
       dependencies[name] = COMMON_DEPENDENCIES[name] || "latest";
     });
   } catch (error) {
