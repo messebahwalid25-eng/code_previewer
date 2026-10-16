@@ -13,7 +13,9 @@ const safeScript = (text: string) => text.replace(/<\/script/gi, "<\\/script");
 export async function compilePreview(input: PreviewFiles, assetURLs: Record<string, string> = {}) {
   await initialize();
   const files = normalizeFiles(input);
-  const assets = normalizeFiles(assetURLs);
+  const combined = normalizeFiles({ ...input, ...assetURLs });
+  const assetValues = new Set(Object.values(assetURLs));
+  const assets = Object.fromEntries(Object.entries(combined).filter(([, value]) => assetValues.has(value)));
   const entry = findEntry(files);
   if (!entry) throw new Error("Aucun point d’entrée React/Vite trouvé (src/main.tsx ou src/index.tsx).");
   const pkg = readJson(files["/package.json"]);
@@ -58,7 +60,6 @@ export async function compilePreview(input: PreviewFiles, assetURLs: Record<stri
           styles.push(css);
           return { contents: "export default {};", loader: "js" };
         }
-        if (args.path.endsWith("?raw")) return { contents: `export default ${JSON.stringify(code)}`, loader: "js" };
         const extension = args.path.split(".").pop();
         const loader = extension === "json" ? "json" : extension === "ts" ? "ts" : extension === "tsx" ? "tsx" : "jsx";
         return { contents: code, loader, resolveDir: args.path.slice(0, args.path.lastIndexOf("/")) };
