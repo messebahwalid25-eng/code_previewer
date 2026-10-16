@@ -29,7 +29,7 @@ const ProjectDetails = () => {
 
   const hasHtmlFile = files.some(f => f.file_name.toLowerCase().endsWith(".html"));
   const canPreview = project?.project_type === "html_css_js" || hasHtmlFile;
-  const canPreviewReact = project?.project_type === "react";
+  const canPreviewReact = project?.project_type === "react" || files.some(f => /(^|\/)src\/(main|index)\.(tsx|jsx|ts)$/.test(f.file_path));
   const isFlutter = project?.project_type === "flutter_web";
   const selectedIsHtml = selectedFile?.file_type === "code" && selectedFile.file_name.toLowerCase().endsWith(".html");
 
@@ -77,7 +77,7 @@ const ProjectDetails = () => {
   // Load all React files for preview
   useEffect(() => {
     const loadReactFiles = async () => {
-      if (project?.project_type !== "react" || files.length === 0) return;
+      if (!canPreviewReact || files.length === 0) return;
       
       setIsLoadingReactFiles(true);
       const contents: Record<string, string> = {};
@@ -88,7 +88,7 @@ const ProjectDetails = () => {
       await Promise.all(
         codeFiles.map(async (file) => {
           const content = await extractionService.getFileContent(file.storage_path);
-          if (content) {
+          if (content !== null) {
             contents[file.storage_path] = content;
           }
         })
@@ -99,7 +99,7 @@ const ProjectDetails = () => {
     };
     
     loadReactFiles();
-  }, [project?.project_type, files]);
+  }, [canPreviewReact, files]);
 
   const handleFileClick = async (file: ExtractedFile) => {
     setSelectedFile(file);
@@ -123,7 +123,7 @@ const ProjectDetails = () => {
   };
 
   useEffect(() => {
-    if (!selectedFile || selectedFile.file_type !== "code" || !selectedFile.file_name.toLowerCase().endsWith(".html") || !fileContent || !id) {
+    if (canPreviewReact || !selectedFile || selectedFile.file_type !== "code" || !selectedFile.file_name.toLowerCase().endsWith(".html") || !fileContent || !id) {
       return;
     }
 
@@ -152,7 +152,7 @@ const ProjectDetails = () => {
     return () => {
       isActive = false;
     };
-  }, [selectedFile, fileContent, id, files]);
+  }, [selectedFile, fileContent, id, files, canPreviewReact]);
 
   const toggleDir = (dir: string) => {
     setExpandedDirs(prev => {
@@ -356,7 +356,7 @@ const ProjectDetails = () => {
                       size="sm"
                       onClick={() => setViewMode("preview")}
                       className="h-7 px-3"
-                      disabled={(!selectedIsHtml && canPreviewReact && isLoadingReactFiles) || (selectedIsHtml && isLoadingPreview)}
+                      disabled={canPreviewReact ? isLoadingReactFiles : isLoadingPreview}
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       Aperçu
@@ -371,7 +371,7 @@ const ProjectDetails = () => {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                ) : viewMode === "preview" && selectedIsHtml ? (
+                ) : viewMode === "preview" && selectedIsHtml && !canPreviewReact ? (
                   isLoadingPreview ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
