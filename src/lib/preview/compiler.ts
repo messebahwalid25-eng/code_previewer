@@ -1,10 +1,11 @@
 import * as esbuild from "esbuild-wasm";
-import wasmURL from "esbuild-wasm/esbuild.wasm?url";
+import compilerAsset from "../../../public/wasm/esbuild.wasm.asset.json";
 import { findEntry, normalizeFiles, normalizePath, publicEnvironment, readJson, resolveLocal, type PreviewFiles } from "./project";
 
 let initialization: Promise<void> | undefined;
 function initialize() {
-  if (!initialization) initialization = esbuild.initialize({ wasmURL, worker: true }).catch(error => { initialization = undefined; throw error; });
+  if (typeof window === "undefined") return Promise.reject(new Error("Le compilateur d’aperçu nécessite un navigateur."));
+  if (!initialization) initialization = esbuild.initialize({ wasmURL: compilerAsset.url, worker: true }).catch(error => { initialization = undefined; throw error; });
   return initialization;
 }
 
