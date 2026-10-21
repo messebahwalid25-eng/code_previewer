@@ -1,14 +1,19 @@
-import { Upload, ArrowRight, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Upload, ArrowRight, Sparkles, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import UploadZone from "./UploadZone";
+import DemoVideoModal from "./DemoVideoModal";
 
 const HeroSection = () => {
+  const [demoOpen, setDemoOpen] = useState(false);
+
   const scrollToUpload = () => {
     const uploadZone = document.querySelector('[data-upload-zone]');
     if (uploadZone) {
       uploadZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
+
 
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
