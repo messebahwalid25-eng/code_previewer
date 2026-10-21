@@ -11,9 +11,9 @@ const DemoVideoModal = ({ open, onOpenChange }: DemoVideoModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        showCloseButton={false}
         className="max-w-3xl p-0 border-border/60 bg-card overflow-hidden rounded-2xl"
       >
+
         <DialogTitle className="sr-only">Démo de CodePreviewer</DialogTitle>
         <div className="relative">
           <button
