@@ -50,9 +50,11 @@ const HeroSection = () => {
               Uploader un projet
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button variant="heroOutline" size="xl" onClick={scrollToUpload}>
+            <Button variant="heroOutline" size="xl" onClick={() => setDemoOpen(true)}>
+              <Play className="w-5 h-5" />
               Voir une démo
             </Button>
+
           </div>
 
           {/* Upload Zone */}
@@ -61,8 +63,10 @@ const HeroSection = () => {
           </div>
         </div>
       </div>
+      <DemoVideoModal open={demoOpen} onOpenChange={setDemoOpen} />
     </section>
   );
 };
+
 
 export default HeroSection;
